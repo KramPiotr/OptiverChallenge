@@ -3,6 +3,7 @@ import numpy as np
 from optibook.synchronous_client import Exchange
 import logging
 import collections
+from time import sleep
 
 ia = 0.9
 safety = 1
@@ -44,6 +45,14 @@ class Prediction:
         self.confidence = confidence
 
 class PriceBook_:
+    
+    def get_price_book(self):
+        bids_length = 0
+        while bids_length == 0:
+            sleep(0.1)
+            self.price_book = exchange.get_last_price_book(self.instrument.id)
+            bids_length = len(self.price_book.bids)
+            
     def calculate_averages(self, exponent, maximal_volume):
         bids = [(pv.price, pv.volume) for pv in self.price_book.bids]
         asks = [(pv.price, pv.volume) for pv in self.price_book.asks]
@@ -52,24 +61,31 @@ class PriceBook_:
         self.asks_avg = weighted_average(asks, exponent, maximal_volume)
         self.avg = (self.bids_avg + self.asks_avg) / 2
 
-    def __init__(self, price_book, exponent, maximal_volume):
-        self.price_book = price_book
+    def __init__(self, instrument, exponent, maximal_volume):
+        self.instrument = instrument
+        self.get_price_book()
         self.calculate_averages(exponent, maximal_volume)
 
 def update_estimates(instrument, curr_price=None):
     global exchange
     exponent, maximal_volume, aggressor_bias, time_steepness, forget, book = instrument.params.unpack()
 
-    price_book = PriceBook_(exchange.get_last_price_book(instrument.id), exponent, maximal_volume)
-
-    trade_ticks = exchange.poll_new_trade_ticks(instrument.id)
-    trade_ticks = filter(lambda ticks: ticks.buyer != name and ticks.seller != name, trade_ticks)
-    prices = map(lambda t: t.price * (100 + aggressor_bias)/100 if t.aggressor_bias == "ask" else t.price * (100 - aggressor_bias)/100, trade_ticks)
+    price_book = PriceBook_(instrument, exponent, maximal_volume)
+    len_trades = 0
+    while len_trades == 0:
+        sleep(0.1)
+        trade_ticks = exchange.poll_new_trade_ticks(instrument.id)
+        len_trades = len(trade_ticks)
+    trade_ticks = list(filter(lambda ticks: ticks.buyer != name and ticks.seller != name, trade_ticks))
+    prices = list(map(lambda t: t.price * (100 + aggressor_bias)/100 if t.aggressor_side == "ask" else t.price * (100 - aggressor_bias)/100, trade_ticks))
 
     timestamps = [t.timestamp for t in trade_ticks]
-    seconds = [(t.timestamp - timestamps[0]).seconds for t in timestamps]
+    seconds = [(t - timestamps[0]).seconds for t in timestamps]
+    print(f"seconds {seconds}")
     price_weights = switch_mean_and_std(seconds, 1, time_steepness)
-    price_avg = sum([p * w for p, w in zip(prices, price_weights)])
+    print(f"weights {price_weights}")
+    price_avg = sum([p * w for p, w in zip(prices, price_weights)]) / len(prices)
+    print(f"avg {price_avg}")
 
     new_price = price_avg * (1 - book) + price_book.avg * book
     return (1 - forget) * curr_price + forget * new_price if curr_price else new_price
@@ -100,7 +116,7 @@ if __name__ == "__main__":
     logger.setLevel('ERROR')
     print("Setup was successful.")
     connect()
-
+    sleep(5)
     IA = Instrument_(PA, Params())
     IB = Instrument_(PB, Params())
     instruments = [IA, IB]
@@ -114,8 +130,10 @@ if __name__ == "__main__":
         IB.update()
         update_positions()
         price = ia * IA.price + (1 - ia) * IB.price
-        ask_price = price + safety
-        bid_price = price - safety
+        ask_price = float(price + safety)
+        bid_price = float(price - safety)
+        print(f"Ask prediction {ask_price}")
+        print(f"Bid prediction {bid_price}")
         for i in instruments:
             bid_volume = volume_part * (500 - positions[i.id])
             ask_volume = volume_part * (500 + positions[i.id])

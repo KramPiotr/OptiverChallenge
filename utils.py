@@ -17,12 +17,9 @@ def weighted_average(sample, exponent, maximal_volume):
     return (sum / total_volume) ** (1 / exponent)
 
 def switch_mean_and_std(sequence, new_mean, new_std):
-    mean_diff = new_mean - np.mean(sequence)
-    std_diff = new_std/np.std(sequence)
-    new_sequence = [(s + mean_diff) * std_diff for s in sequence]
+    std = np.std(sequence)
+    if std == 0:
+        return [new_mean] * len(sequence)
+    std_diff = new_std/std
+    new_sequence = [(s - np.mean(sequence)) * std_diff + new_mean for s in sequence]
     return new_sequence
-
-from time import sleep
-while(True):
-    sleep(0.5)
-    print("nice")
