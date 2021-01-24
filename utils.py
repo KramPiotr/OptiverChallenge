@@ -1,3 +1,5 @@
+import numpy as np
+
 def weighted_average(sample, exponent, maximal_volume):
     """
 	:param sample: list of (element, weight)
@@ -13,3 +15,14 @@ def weighted_average(sample, exponent, maximal_volume):
         total_volume += w
         if total_volume >= maximal_volume: break
     return (sum / total_volume) ** (1 / exponent)
+
+def switch_mean_and_std(sequence, new_mean, new_std):
+    mean_diff = new_mean - np.mean(sequence)
+    std_diff = new_std/np.std(sequence)
+    new_sequence = [(s + mean_diff) * std_diff for s in sequence]
+    return new_sequence
+
+from time import sleep
+while(True):
+    sleep(0.5)
+    print("nice")
